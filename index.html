@@ -6,33 +6,48 @@
 <title>Dashboard Cuaca Indonesia</title>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; }
+  :root { --bg:#0f172a; --card:#1e293b; --card2:#26334d; --text:#e2e8f0;
+          --muted:#94a3b8; --accent:#38bdf8; --border:#334155; }
   * { box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,sans-serif; }
-  body { background:var(--bg); color:var(--text); padding:24px; max-width:1100px; margin:0 auto; }
+  body { background:var(--bg); color:var(--text); padding:24px; max-width:1200px; margin:0 auto; }
   h1 { font-size:1.7rem; margin-bottom:4px; }
   .caption { color:var(--muted); font-size:.9rem; margin-bottom:20px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
-  .chip { background:var(--card); border:1px solid #334155; color:var(--text);
+  .chip { background:var(--card); border:1px solid var(--border); color:var(--text);
           padding:7px 16px; border-radius:999px; cursor:pointer; font-size:.9rem; transition:.15s; }
   .chip.on { background:var(--accent); border-color:var(--accent); color:#0f172a; font-weight:600; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:28px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:30px; }
   .card { background:var(--card); border-radius:14px; padding:16px; }
   .card .kota { color:var(--muted); font-size:.85rem; }
   .card .suhu { font-size:2rem; font-weight:700; }
   .card .min { color:var(--muted); font-size:.85rem; }
   .section { font-size:1.15rem; margin:18px 0 10px; }
   .chart { background:var(--card); border-radius:14px; padding:8px; }
-  #status { color:var(--muted); padding:40px 0; text-align:center; }
+  .kota-section { background:var(--card); border-radius:16px; padding:18px; margin-bottom:22px; }
+  .kota-head { display:flex; align-items:baseline; gap:12px; margin-bottom:14px; }
+  .kota-head h2 { font-size:1.2rem; }
+  .kota-head .ringkas { color:var(--muted); font-size:.9rem; }
+  .hari-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; }
+  .hari { background:var(--card2); border-radius:12px; padding:12px; text-align:center; }
+  .hari .tgl { color:var(--muted); font-size:.78rem; text-transform:capitalize; }
+  .hari .ikon { font-size:1.9rem; margin:4px 0; }
+  .hari .ket { font-size:.8rem; margin-bottom:6px; min-height:2.1em; }
+  .hari .t { font-weight:700; font-size:1.05rem; }
+  .hari .tmin { color:var(--muted); font-size:.82rem; }
+  .hari .det { margin-top:8px; font-size:.76rem; color:var(--muted); line-height:1.5; }
+  .hari .det b { color:var(--text); font-weight:600; }
+  #status { color:var(--muted); padding:30px 0; text-align:center; }
 </style>
 </head>
 <body>
 <h1>🌤️ Dashboard Cuaca Indonesia</h1>
-<p class="caption">Prakiraan 7 hari — data Open-Meteo API (gratis, tanpa API key)</p>
+<p class="caption">Prakiraan 7 hari per wilayah — data Open-Meteo API (gratis, tanpa API key)</p>
 <div class="chips" id="chips"></div>
 <div class="cards" id="cards"></div>
 <div id="status">Memuat data…</div>
-<div><div class="section">Suhu 7 hari ke depan</div><div class="chart" id="suhu"></div></div>
+<div><div class="section">Perbandingan antar wilayah</div><div class="chart" id="suhu"></div></div>
 <div><div class="section">Peluang hujan maksimal (%)</div><div class="chart" id="hujan"></div></div>
+<div><div class="section">Detail per hari, per wilayah</div><div id="detail"></div></div>
 
 <script>
 const KOTA = {
@@ -40,6 +55,23 @@ const KOTA = {
   "Yogyakarta":[-7.8,110.4], "Medan":[3.6,98.67], "Makassar":[-5.15,119.43],
   "Denpasar":[-8.65,115.22],
 };
+const HARI = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+// Open-Meteo weathercode -> [ikon, keterangan]
+const CODES = {
+  0:["☀️","Cerah"], 1:["🌤️","Cerah berawan"], 2:["⛅","Berawan sebagian"],
+  3:["☁️","Berawan"], 45:["🌫️","Berkabut"], 48:["🌫️","Kabut beku"],
+  51:["🌦️","Gerimis ringan"], 53:["🌦️","Gerimis"], 55:["🌧️","Gerimis lebat"],
+  56:["🌧️","Gerimis beku"], 57:["🌧️","Gerimis beku lebat"],
+  61:["🌦️","Hujan ringan"], 63:["🌧️","Hujan"], 65:["🌧️","Hujan lebat"],
+  66:["🌧️","Hujan beku"], 67:["🌧️","Hujan beku lebat"],
+  71:["🌨️","Salju ringan"], 73:["🌨️","Salju"], 75:["❄️","Salju lebat"], 77:["🌨️","Butir salju"],
+  80:["🌦️","Hujan lokal ringan"], 81:["🌧️","Hujan lokal"], 82:["⛈️","Hujan lokal lebat"],
+  85:["🌨️","Hujan salju"], 86:["🌨️","Hujan salju lebat"],
+  95:["⛈️","Badai petir"], 96:["⛈️","Badai petir + hujan es"], 99:["⛈️","Badai petir hebat + hujan es"],
+};
+const kodeCuaca = c => CODES[c] || ["🌡️","—"];
+const fmtTgl = d => `${HARI[d.getDay()]}, ${d.getDate()} ${["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getMonth()]}`;
+
 const pilih = new Set(["Jakarta","Bandung","Surabaya"]);
 const cache = {};
 
@@ -47,11 +79,14 @@ async function ambil(kota) {
   if (cache[kota]) return cache[kota];
   const [lat,lon] = KOTA[kota];
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
-    + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max`
+    + `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,`
+    + `precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean`
     + `&timezone=Asia%2FJakarta&forecast_days=7`;
   const d = (await (await fetch(url)).json()).daily;
   const df = { tgl:d.time.map(s=>new Date(s+"T00:00:00")),
-               tmax:d.temperature_2m_max, tmin:d.temperature_2m_min, hujan:d.precipitation_probability_max };
+    kode:d.weather_code, tmax:d.temperature_2m_max, tmin:d.temperature_2m_min,
+    hujan_mm:d.precipitation_sum, hujan_p:d.precipitation_probability_max,
+    angin:d.wind_speed_10m_max, lembap:d.relative_humidity_2m_mean };
   cache[kota] = df; return df;
 }
 
@@ -64,27 +99,24 @@ function layout(yTitle) {
 
 async function render() {
   document.getElementById("cards").innerHTML = "";
+  document.getElementById("detail").innerHTML = "";
   if (!pilih.size) { document.getElementById("status").textContent = "Pilih minimal satu kota 👆"; return; }
   document.getElementById("status").textContent = "";
   const today = new Date(); today.setHours(0,0,0,0);
   const data = {};
   for (const k of pilih) data[k] = await ambil(k);
 
-  // kartu ringkasan
-  const hariIni = Object.keys(data).map(k => {
-    const i = data[k].tgl.findIndex(t => +t === +today);
-    const idx = i >= 0 ? i : 0;
-    return {k, idx};
-  });
-  document.getElementById("cards").innerHTML = hariIni.map(({k,idx}) => {
+  // kartu ringkasan hari ini
+  document.getElementById("cards").innerHTML = Object.keys(data).map(k => {
     const d = data[k];
-    const em = d.hujan[idx] >= 60 ? "🌧️" : d.hujan[idx] >= 30 ? "⛅" : "☀️";
-    return `<div class="card"><div class="kota">${em} ${k}</div>
+    const idx = Math.max(0, d.tgl.findIndex(t => +t === +today));
+    const [ikon] = kodeCuaca(d.kode[idx]);
+    return `<div class="card"><div class="kota">${ikon} ${k}</div>
       <div class="suhu">${Math.round(d.tmax[idx])}°C</div>
-      <div class="min">min ${Math.round(d.tmin[idx])}°C · hujan ${d.hujan[idx]}%</div></div>`;
+      <div class="min">min ${Math.round(d.tmin[idx])}°C · hujan ${d.hujan_p[idx]}% · angin ${Math.round(d.angin[idx])} km/j</div></div>`;
   }).join("");
 
-  // grafik suhu
+  // grafik perbandingan suhu
   const fig1 = { data:[], layout:layout("°C") };
   for (const k of pilih) {
     const d = data[k];
@@ -93,15 +125,37 @@ async function render() {
   }
   Plotly.newPlot("suhu", fig1);
 
-  // grafik hujan
   const fig2 = { data:[], layout:layout("%") };
   fig2.layout.barmode = "group";
   fig2.layout.yaxis.range = [0,100];
-  for (const k of pilih) fig2.data.push({x:data[k].tgl, y:data[k].hujan, name:k, type:"bar"});
+  for (const k of pilih) fig2.data.push({x:data[k].tgl, y:data[k].hujan_p, name:k, type:"bar"});
   Plotly.newPlot("hujan", fig2);
+
+  // detail per kota, per hari
+  document.getElementById("detail").innerHTML = Object.keys(data).map(k => {
+    const d = data[k];
+    const hari = d.tgl.map((t,i) => {
+      const [ikon, ket] = kodeCuaca(d.kode[i]);
+      return `<div class="hari">
+        <div class="tgl">${fmtTgl(t)}</div>
+        <div class="ikon">${ikon}</div>
+        <div class="ket">${ket}</div>
+        <div class="t">${Math.round(d.tmax[i])}° <span class="tmin">/ ${Math.round(d.tmin[i])}°</span></div>
+        <div class="det">
+          🌧️ <b>${d.hujan_mm[i] ?? 0} mm</b> (${d.hujan_p[i]}%)<br>
+          💨 <b>${Math.round(d.angin[i])}</b> km/j<br>
+          💧 <b>${d.lembap[i] ?? "—"}%</b> kelembapan
+        </div>
+      </div>`;
+    }).join("");
+    return `<div class="kota-section">
+      <div class="kota-head"><h2>📍 ${k}</h2>
+      <span class="ringkas">7 hari ke depan</span></div>
+      <div class="hari-grid">${hari}</div>
+    </div>`;
+  }).join("");
 }
 
-// chips
 const chipsEl = document.getElementById("chips");
 for (const k of Object.keys(KOTA)) {
   const b = document.createElement("button");
