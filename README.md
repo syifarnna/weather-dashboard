@@ -18,4 +18,6 @@ streamlit run app.py
 ```
 
 ## Live demo
-TBA — setelah deploy ke Streamlit Community Cloud.
+🌐 **https://syifarnna.github.io/weather-dashboard/** (GitHub Pages, HTML murni)
+
+Versi Streamlit: jalankan lokal dengan perintah di atas.
