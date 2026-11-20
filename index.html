@@ -45,8 +45,7 @@
 <div class="chips" id="chips"></div>
 <div class="cards" id="cards"></div>
 <div id="status">Memuat data…</div>
-<div><div class="section">Perbandingan antar wilayah</div><div class="chart" id="suhu"></div></div>
-<div><div class="section">Peluang hujan maksimal (%)</div><div class="chart" id="hujan"></div></div>
+<div><div class="section">🗺️ Peta cuaca hari ini</div><div class="chart" id="map"></div></div>
 <div><div class="section">Detail per hari, per wilayah</div><div id="detail"></div></div>
 
 <script>
@@ -116,20 +115,41 @@ async function render() {
       <div class="min">min ${Math.round(d.tmin[idx])}°C · hujan ${d.hujan_p[idx]}% · angin ${Math.round(d.angin[idx])} km/j</div></div>`;
   }).join("");
 
-  // grafik perbandingan suhu
-  const fig1 = { data:[], layout:layout("°C") };
-  for (const k of pilih) {
-    const d = data[k];
-    fig1.data.push({x:d.tgl, y:d.tmax, name:`${k} (max)`, mode:"lines+markers"});
-    fig1.data.push({x:d.tgl, y:d.tmin, name:`${k} (min)`, mode:"lines", line:{dash:"dot"}});
-  }
-  Plotly.newPlot("suhu", fig1);
-
-  const fig2 = { data:[], layout:layout("%") };
-  fig2.layout.barmode = "group";
-  fig2.layout.yaxis.range = [0,100];
-  for (const k of pilih) fig2.data.push({x:data[k].tgl, y:data[k].hujan_p, name:k, type:"bar"});
-  Plotly.newPlot("hujan", fig2);
+  // peta geografis cuaca (semua kota, hari ini)
+  const allKota = Object.keys(KOTA);
+  const semua = {};
+  for (const k of allKota) semua[k] = (cache[k] = cache[k] || await ambil(k));
+  const idxToday = k => Math.max(0, semua[k].tgl.findIndex(t => +t === +today));
+  const peta = {
+    data: allKota.map(k => {
+      const d = semua[k], i = idxToday(k);
+      const [ikon, ket] = kodeCuaca(d.kode[i]);
+      return {
+        type:"scattergeo", mode:"markers", name:k,
+        lat:[KOTA[k][0]], lon:[KOTA[k][1]],
+        marker:{ size: 16 + d.hujan_p[i]/4, sizemode:"diameter",
+                 color: d.tmax[i], colorscale:"Turbo", cmin:22, cmax:35,
+                 line:{color:"#0f172a", width:2}, showscale:true,
+                 colorbar:{title:{text:"°C"}, thickness:12, len:0.7} },
+        hovertemplate: `<b>${ikon} ${k}</b><br>${ket}<br>` +
+          `Suhu: %{marker.color:.0f}°C (min ${Math.round(d.tmin[i])}°)<br>` +
+          `Hujan: ${d.hujan_mm[i] ?? 0} mm (${d.hujan_p[i]}%)<br>` +
+          `Angin: ${Math.round(d.angin[i])} km/j<br>` +
+          `Kelembapan: ${d.lembap[i] ?? "—"}%<extra></extra>`,
+      };
+    }),
+    layout: {
+      geo:{ projection:{type:"mercator"},
+            lataxis:{range:[-12,7]}, lonaxis:{range:[92,122]},
+            showland:true, landcolor:"#1e293b", showocean:true, oceancolor:"#0b1220",
+            showcountries:true, countrycolor:"#475569",
+            showcoastlines:true, coastlinecolor:"#475569",
+            bgcolor:"rgba(0,0,0,0)" },
+      paper_bgcolor:"#1e293b", font:{color:"#e2e8f0"},
+      margin:{l:0,r:0,t:0,b:0}, height:420, showlegend:false,
+    }
+  };
+  Plotly.newPlot("map", peta);
 
   // detail per kota, per hari
   document.getElementById("detail").innerHTML = Object.keys(data).map(k => {
