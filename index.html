@@ -45,7 +45,7 @@
 <div class="chips" id="chips"></div>
 <div class="cards" id="cards"></div>
 <div id="status">Memuat data…</div>
-<div><div class="section">🗺️ Peta cuaca hari ini</div><div class="chart" id="map"></div></div>
+<div><div class="section">🗺️ Peta kadar air hari ini</div><div class="chart" id="map"></div></div>
 <div><div class="section">📊 Rata-rata nasional per hari</div><div id="detail"></div>
 <div><div class="section">💧 Tren kadar air rata-rata nasional</div><div class="chart" id="tren"></div></div></div>
 
@@ -129,11 +129,12 @@ async function render() {
         type:"scattergeo", mode:"markers", name:k,
         lat:[KOTA[k][0]], lon:[KOTA[k][1]],
         marker:{ size: 16 + d.hujan_p[i]/4, sizemode:"diameter",
-                 color: d.tmax[i], colorscale:"Turbo", cmin:22, cmax:35,
+                 color: d.lembap[i], colorscale:"YlGnBu", reversescale:false, cmin:60, cmax:100,
                  line:{color:"#0f172a", width:2}, showscale:true,
-                 colorbar:{title:{text:"°C"}, thickness:12, len:0.7} },
+                 colorbar:{title:{text:"kadar air (%)"}, thickness:12, len:0.7} },
         hovertemplate: `<b>${ikon} ${k}</b><br>${ket}<br>` +
-          `Suhu: %{marker.color:.0f}°C (min ${Math.round(d.tmin[i])}°)<br>` +
+          `Kadar air: %{marker.color:.0f}%<br>` +
+          `Suhu: ${Math.round(d.tmax[i])}°C (min ${Math.round(d.tmin[i])}°)<br>` +
           `Hujan: ${d.hujan_mm[i] ?? 0} mm (${d.hujan_p[i]}%)<br>` +
           `Angin: ${Math.round(d.angin[i])} km/j<br>` +
           `Kelembapan: ${d.lembap[i] ?? "—"}%<extra></extra>`,
