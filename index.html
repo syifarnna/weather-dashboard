@@ -41,12 +41,13 @@
 </head>
 <body>
 <h1>🌤️ Dashboard Cuaca Indonesia</h1>
-<p class="caption">Prakiraan 7 hari per wilayah — data Open-Meteo API (gratis, tanpa API key)</p>
+<p class="caption">Prakiraan 7 hari & kadar air nasional — data Open-Meteo API (gratis, tanpa API key)</p>
 <div class="chips" id="chips"></div>
 <div class="cards" id="cards"></div>
 <div id="status">Memuat data…</div>
 <div><div class="section">🗺️ Peta cuaca hari ini</div><div class="chart" id="map"></div></div>
-<div><div class="section">Detail per hari, per wilayah</div><div id="detail"></div></div>
+<div><div class="section">📊 Rata-rata nasional per hari</div><div id="detail"></div>
+<div><div class="section">💧 Tren kadar air rata-rata nasional</div><div class="chart" id="tren"></div></div></div>
 
 <script>
 const KOTA = {
@@ -151,29 +152,53 @@ async function render() {
   };
   Plotly.newPlot("map", peta);
 
-  // detail per kota, per hari
-  document.getElementById("detail").innerHTML = Object.keys(data).map(k => {
-    const d = data[k];
-    const hari = d.tgl.map((t,i) => {
-      const [ikon, ket] = kodeCuaca(d.kode[i]);
-      return `<div class="hari">
-        <div class="tgl">${fmtTgl(t)}</div>
-        <div class="ikon">${ikon}</div>
-        <div class="ket">${ket}</div>
-        <div class="t">${Math.round(d.tmax[i])}° <span class="tmin">/ ${Math.round(d.tmin[i])}°</span></div>
-        <div class="det">
-          🌧️ <b>${d.hujan_mm[i] ?? 0} mm</b> (${d.hujan_p[i]}%)<br>
-          💨 <b>${Math.round(d.angin[i])}</b> km/j<br>
-          💧 <b>${d.lembap[i] ?? "—"}%</b> kelembapan
-        </div>
-      </div>`;
-    }).join("");
-    return `<div class="kota-section">
-      <div class="kota-head"><h2>📍 ${k}</h2>
-      <span class="ringkas">7 hari ke depan</span></div>
-      <div class="hari-grid">${hari}</div>
+  // rata-rata nasional per hari (kadar air ditonjolkan)
+  const allK2 = Object.keys(semua);
+  const n = semua[allK2[0]].tgl.length;
+  const avg = i => ({
+    tgl: semua[allK2[0]].tgl[i],
+    tmax: allK2.reduce((s,k)=>s+semua[k].tmax[i],0)/allK2.length,
+    tmin: allK2.reduce((s,k)=>s+semua[k].tmin[i],0)/allK2.length,
+    lembap: allK2.reduce((s,k)=>s+(semua[k].lembap[i]||0),0)/allK2.length,
+    hujan_mm: allK2.reduce((s,k)=>s+(semua[k].hujan_mm[i]||0),0)/allK2.length,
+    hujan_p: allK2.reduce((s,k)=>s+semua[k].hujan_p[i],0)/allK2.length,
+    angin: allK2.reduce((s,k)=>s+semua[k].angin[i],0)/allK2.length,
+  });
+  const A = Array.from({length:n}, (_,i)=>avg(i));
+
+  document.getElementById("detail").innerHTML =
+    `<div class="kota-section">
+      <div class="kota-head"><h2>📊 Rata-rata nasional</h2>
+      <span class="ringkas">rata-rata ${allK2.length} kota · 7 hari ke depan</span></div>
+      <div class="hari-grid">${A.map(a => {
+        const em = a.hujan_p >= 60 ? "🌧️" : a.hujan_p >= 30 ? "⛅" : "☀️";
+        return `<div class="hari">
+          <div class="tgl">${fmtTgl(a.tgl)}</div>
+          <div class="ikon">${em}</div>
+          <div class="t">${Math.round(a.tmax)}° <span class="tmin">/ ${Math.round(a.tmin)}°</span></div>
+          <div class="det">
+            💧 <b>${Math.round(a.lembap)}%</b> kadar air<br>
+            🌧️ <b>${a.hujan_mm.toFixed(1)} mm</b> (${Math.round(a.hujan_p)}%)<br>
+            💨 <b>${Math.round(a.angin)}</b> km/j
+          </div>
+        </div>`;
+      }).join("")}</div>
     </div>`;
-  }).join("");
+
+  // tren kadar air & suhu rata-rata
+  const figA = { data:[
+      {x:A.map(a=>a.tgl), y:A.map(a=>a.lembap), name:"Kadar air (%)", mode:"lines+markers",
+       line:{color:"#38bdf8", width:3}, yaxis:"y"},
+      {x:A.map(a=>a.tgl), y:A.map(a=>Math.round(a.tmax)), name:"Suhu rata-rata (°C)", mode:"lines+markers",
+       line:{color:"#fb923c", width:3}, yaxis:"y2"},
+    ],
+    layout:{ paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+      font:{color:"#e2e8f0"}, margin:{l:50,r:55,t:10,b:40}, height:320,
+      legend:{orientation:"h", y:-0.3},
+      xaxis:{gridcolor:"#334155"},
+      yaxis:{title:"Kadar air (%)", gridcolor:"#334155", range:[0,100]},
+      yaxis2:{title:"°C", overlaying:"y", side:"right"} } };
+  Plotly.newPlot("tren", figA);
 }
 
 const chipsEl = document.getElementById("chips");
